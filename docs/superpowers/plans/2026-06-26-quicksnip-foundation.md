@@ -1,10 +1,10 @@
-# QuickSnip Foundation (M0 + M1) Implementation Plan
+# Nab Foundation (M0 + M1) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the menubar-resident skeleton and the screenshot-to-clipboard upload core: press a hotkey, capture a region, get a clean URL pointing at your own S3-compatible bucket on the clipboard ~instantly.
 
-**Architecture:** A Swift Package with two targets — `QuickSnipCore` (a pure, fully unit-tested library holding all signing/keygen/URL/pipeline logic) and `QuickSnip` (a thin macOS executable that runs as a menubar agent and wires Core to AppKit). The client signs presigned PUT URLs locally with hand-rolled AWS Signature V4 and uploads bytes directly to the user's bucket — no server in the hot path. The shareable URL is deterministic from the object key, so it is copied to the clipboard before the upload finishes.
+**Architecture:** A Swift Package with two targets — `QuickNabCore` (a pure, fully unit-tested library holding all signing/keygen/URL/pipeline logic) and `Nab` (a thin macOS executable that runs as a menubar agent and wires Core to AppKit). The client signs presigned PUT URLs locally with hand-rolled AWS Signature V4 and uploads bytes directly to the user's bucket — no server in the hot path. The shareable URL is deterministic from the object key, so it is copied to the clipboard before the upload finishes.
 
 **Tech Stack:** Swift 5.9, macOS 13+ (Ventura), Swift Package Manager, AppKit (`NSStatusItem`, `NSPanel`, `NSPasteboard`), Foundation (`URLSession`, `Process`), CryptoKit (SHA-256 / HMAC), KeyboardShortcuts (Sindre Sorhus) for global hotkeys, XCTest.
 
@@ -28,7 +28,7 @@
 ```
 Package.swift
 Sources/
-  QuickSnipCore/
+  QuickNabCore/
     Crypto.swift                 # SHA-256 / HMAC-SHA256 / hex over CryptoKit
     SigV4Signer.swift            # AWS Signature V4 presigned-URL generation
     ContentType.swift            # file-extension → MIME mapping
@@ -42,7 +42,7 @@ Sources/
     UploadPipeline.swift         # keygen → optimistic copy → presign → PUT → verify
     KeychainStore.swift          # credential storage in macOS Keychain
     CaptureCommand.swift         # builds `screencapture` argument vectors (pure)
-  QuickSnip/
+  Nab/
     main.swift                   # entry point
     AppDelegate.swift            # lifecycle, accessory policy, wiring
     MenuBarController.swift      # NSStatusItem + NSMenu
@@ -51,7 +51,7 @@ Sources/
     HotkeyManager.swift          # KeyboardShortcuts registration
     DevConfig.swift              # throwaway env-var config for the e2e smoke test
 Tests/
-  QuickSnipCoreTests/
+  QuickNabCoreTests/
     CryptoTests.swift
     SigV4SignerTests.swift
     ContentTypeTests.swift
@@ -64,7 +64,7 @@ Tests/
     CaptureCommandTests.swift
 ```
 
-Responsibility split: everything that can be a pure function or is testable without the app lifecycle lives in `QuickSnipCore` and gets real XCTest coverage. The `QuickSnip` executable holds only `NSApplication` lifecycle, the status item, the toast panel, the capture `Process` runner, and hotkey registration — verified by build + manual smoke test, since these are OS-integration shells with no meaningful pure logic.
+Responsibility split: everything that can be a pure function or is testable without the app lifecycle lives in `QuickNabCore` and gets real XCTest coverage. The `Nab` executable holds only `NSApplication` lifecycle, the status item, the toast panel, the capture `Process` runner, and hotkey registration — verified by build + manual smoke test, since these are OS-integration shells with no meaningful pure logic.
 
 ---
 
@@ -72,25 +72,25 @@ Responsibility split: everything that can be a pure function or is testable with
 
 **Files:**
 - Create: `Package.swift`
-- Create: `Sources/QuickSnipCore/Crypto.swift` (placeholder marker only this task)
-- Create: `Sources/QuickSnip/main.swift` (minimal, replaced in Task 11)
-- Test: `Tests/QuickSnipCoreTests/CryptoTests.swift` (smoke test only this task)
+- Create: `Sources/QuickNabCore/Crypto.swift` (placeholder marker only this task)
+- Create: `Sources/Nab/main.swift` (minimal, replaced in Task 11)
+- Test: `Tests/QuickNabCoreTests/CryptoTests.swift` (smoke test only this task)
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a buildable SPM package with library target `QuickSnipCore`, executable target `QuickSnip`, test target `QuickSnipCoreTests`, and the `KeyboardShortcuts` dependency available to `QuickSnip`.
+- Produces: a buildable SPM package with library target `QuickNabCore`, executable target `Nab`, test target `QuickNabCoreTests`, and the `KeyboardShortcuts` dependency available to `Nab`.
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/CryptoTests.swift`:
+`Tests/QuickNabCoreTests/CryptoTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class CryptoTests: XCTestCase {
     func testPackageBuildsAndImports() {
-        XCTAssertTrue(QuickSnipCore.packageIsWired)
+        XCTAssertTrue(QuickNabCore.packageIsWired)
     }
 }
 ```
@@ -98,7 +98,7 @@ final class CryptoTests: XCTestCase {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `swift test --filter CryptoTests/testPackageBuildsAndImports`
-Expected: FAIL — compile error, `QuickSnipCore` has no member `packageIsWired` (and no `Package.swift` yet).
+Expected: FAIL — compile error, `QuickNabCore` has no member `packageIsWired` (and no `Package.swift` yet).
 
 - [ ] **Step 3: Create `Package.swift`**
 
@@ -107,47 +107,47 @@ Expected: FAIL — compile error, `QuickSnipCore` has no member `packageIsWired`
 import PackageDescription
 
 let package = Package(
-    name: "QuickSnip",
+    name: "Nab",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "QuickSnip", targets: ["QuickSnip"]),
-        .library(name: "QuickSnipCore", targets: ["QuickSnipCore"]),
+        .executable(name: "Nab", targets: ["Nab"]),
+        .library(name: "QuickNabCore", targets: ["QuickNabCore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.2.1"),
     ],
     targets: [
-        .target(name: "QuickSnipCore"),
+        .target(name: "QuickNabCore"),
         .executableTarget(
-            name: "QuickSnip",
+            name: "Nab",
             dependencies: [
-                "QuickSnipCore",
+                "QuickNabCore",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
             ]
         ),
-        .testTarget(name: "QuickSnipCoreTests", dependencies: ["QuickSnipCore"]),
+        .testTarget(name: "QuickNabCoreTests", dependencies: ["QuickNabCore"]),
     ]
 )
 ```
 
 - [ ] **Step 4: Create the placeholder source files**
 
-`Sources/QuickSnipCore/Crypto.swift`:
+`Sources/QuickNabCore/Crypto.swift`:
 
 ```swift
 import Foundation
 
 /// Marker used by the package smoke test in Task 1. Real crypto lands in Task 2.
-public enum QuickSnipCore {
+public enum QuickNabCore {
     public static let packageIsWired = true
 }
 ```
 
-`Sources/QuickSnip/main.swift`:
+`Sources/Nab/main.swift`:
 
 ```swift
 // Replaced in Task 11 with the real menubar app entry point.
-print("QuickSnip skeleton")
+print("Nab skeleton")
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -160,7 +160,7 @@ Expected: PASS. (First run resolves the KeyboardShortcuts dependency — allow n
 ```bash
 git init
 git add Package.swift Sources Tests
-git commit -m "chore: scaffold QuickSnip SPM package (Core + executable + tests)"
+git commit -m "chore: scaffold Nab SPM package (Core + executable + tests)"
 ```
 
 ---
@@ -168,8 +168,8 @@ git commit -m "chore: scaffold QuickSnip SPM package (Core + executable + tests)
 ## Task 2: Crypto primitives
 
 **Files:**
-- Modify: `Sources/QuickSnipCore/Crypto.swift`
-- Test: `Tests/QuickSnipCoreTests/CryptoTests.swift`
+- Modify: `Sources/QuickNabCore/Crypto.swift`
+- Test: `Tests/QuickNabCoreTests/CryptoTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -179,15 +179,15 @@ git commit -m "chore: scaffold QuickSnip SPM package (Core + executable + tests)
   - `func hmacSHA256(key: Data, _ data: Data) -> Data`
   - `func hmacSHA256(key: Data, _ string: String) -> Data`
   - `func hexLower(_ data: Data) -> String`
-  All are free functions in `QuickSnipCore`. Used by Task 3.
+  All are free functions in `QuickNabCore`. Used by Task 3.
 
 - [ ] **Step 1: Write the failing test**
 
-Replace the contents of `Tests/QuickSnipCoreTests/CryptoTests.swift`:
+Replace the contents of `Tests/QuickNabCoreTests/CryptoTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class CryptoTests: XCTestCase {
     // NIST/standard known answers.
@@ -223,14 +223,14 @@ Expected: FAIL — `sha256Hex`, `hmacSHA256`, `hexLower` are not defined.
 
 - [ ] **Step 3: Implement the crypto primitives**
 
-Replace the contents of `Sources/QuickSnipCore/Crypto.swift`:
+Replace the contents of `Sources/QuickNabCore/Crypto.swift`:
 
 ```swift
 import Foundation
 import CryptoKit
 
 /// Marker used by the package smoke test in Task 1.
-public enum QuickSnipCore {
+public enum QuickNabCore {
     public static let packageIsWired = true
 }
 
@@ -272,7 +272,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/Crypto.swift Tests/QuickSnipCoreTests/CryptoTests.swift
+git add Sources/QuickNabCore/Crypto.swift Tests/QuickNabCoreTests/CryptoTests.swift
 git commit -m "feat: SHA-256 / HMAC-SHA256 / hex primitives over CryptoKit"
 ```
 
@@ -281,8 +281,8 @@ git commit -m "feat: SHA-256 / HMAC-SHA256 / hex primitives over CryptoKit"
 ## Task 3: SigV4 presigned-URL signer
 
 **Files:**
-- Create: `Sources/QuickSnipCore/SigV4Signer.swift`
-- Test: `Tests/QuickSnipCoreTests/SigV4SignerTests.swift`
+- Create: `Sources/QuickNabCore/SigV4Signer.swift`
+- Test: `Tests/QuickNabCoreTests/SigV4SignerTests.swift`
 
 **Interfaces:**
 - Consumes: `sha256Hex`, `hmacSHA256`, `hexLower` (Task 2).
@@ -293,11 +293,11 @@ git commit -m "feat: SHA-256 / HMAC-SHA256 / hex primitives over CryptoKit"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/SigV4SignerTests.swift`. The golden value is AWS's own documented example from "Authenticating Requests: Using Query Parameters (AWS Signature Version 4)":
+`Tests/QuickNabCoreTests/SigV4SignerTests.swift`. The golden value is AWS's own documented example from "Authenticating Requests: Using Query Parameters (AWS Signature Version 4)":
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class SigV4SignerTests: XCTestCase {
     private func fixedDate(_ amz: String) -> Date {
@@ -363,7 +363,7 @@ Expected: FAIL — `SigV4Signer` / `SigV4Credentials` are not defined.
 
 - [ ] **Step 3: Implement the signer**
 
-`Sources/QuickSnipCore/SigV4Signer.swift`:
+`Sources/QuickNabCore/SigV4Signer.swift`:
 
 ```swift
 import Foundation
@@ -505,7 +505,7 @@ Expected: PASS (2 tests). The `testMatchesAwsDocumentedExample` signature assert
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/SigV4Signer.swift Tests/QuickSnipCoreTests/SigV4SignerTests.swift
+git add Sources/QuickNabCore/SigV4Signer.swift Tests/QuickNabCoreTests/SigV4SignerTests.swift
 git commit -m "feat: hand-rolled AWS SigV4 presigned-URL signer"
 ```
 
@@ -514,8 +514,8 @@ git commit -m "feat: hand-rolled AWS SigV4 presigned-URL signer"
 ## Task 4: Content-type mapping
 
 **Files:**
-- Create: `Sources/QuickSnipCore/ContentType.swift`
-- Test: `Tests/QuickSnipCoreTests/ContentTypeTests.swift`
+- Create: `Sources/QuickNabCore/ContentType.swift`
+- Test: `Tests/QuickNabCoreTests/ContentTypeTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -523,11 +523,11 @@ git commit -m "feat: hand-rolled AWS SigV4 presigned-URL signer"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/ContentTypeTests.swift`:
+`Tests/QuickNabCoreTests/ContentTypeTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class ContentTypeTests: XCTestCase {
     func testKnownTypes() {
@@ -553,7 +553,7 @@ Expected: FAIL — `ContentType` is not defined.
 
 - [ ] **Step 3: Implement the mapping**
 
-`Sources/QuickSnipCore/ContentType.swift`:
+`Sources/QuickNabCore/ContentType.swift`:
 
 ```swift
 import Foundation
@@ -586,7 +586,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/ContentType.swift Tests/QuickSnipCoreTests/ContentTypeTests.swift
+git add Sources/QuickNabCore/ContentType.swift Tests/QuickNabCoreTests/ContentTypeTests.swift
 git commit -m "feat: file-extension to MIME content-type mapping"
 ```
 
@@ -595,8 +595,8 @@ git commit -m "feat: file-extension to MIME content-type mapping"
 ## Task 5: Object-key generator
 
 **Files:**
-- Create: `Sources/QuickSnipCore/KeyGenerator.swift`
-- Test: `Tests/QuickSnipCoreTests/KeyGeneratorTests.swift`
+- Create: `Sources/QuickNabCore/KeyGenerator.swift`
+- Test: `Tests/QuickNabCoreTests/KeyGeneratorTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -607,11 +607,11 @@ git commit -m "feat: file-extension to MIME content-type mapping"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/KeyGeneratorTests.swift`:
+`Tests/QuickNabCoreTests/KeyGeneratorTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 // Deterministic RNG so we can assert exact slugs.
 struct SeededRNG: RandomNumberGenerator {
@@ -673,7 +673,7 @@ Expected: FAIL — `KeyGenerator` / `NamingScheme` not defined.
 
 - [ ] **Step 3: Implement the generator**
 
-`Sources/QuickSnipCore/KeyGenerator.swift`:
+`Sources/QuickNabCore/KeyGenerator.swift`:
 
 ```swift
 import Foundation
@@ -724,7 +724,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/KeyGenerator.swift Tests/QuickSnipCoreTests/KeyGeneratorTests.swift
+git add Sources/QuickNabCore/KeyGenerator.swift Tests/QuickNabCoreTests/KeyGeneratorTests.swift
 git commit -m "feat: unguessable base62 object-key generator"
 ```
 
@@ -733,10 +733,10 @@ git commit -m "feat: unguessable base62 object-key generator"
 ## Task 6: Provider config + S3-compatible provider
 
 **Files:**
-- Create: `Sources/QuickSnipCore/ProviderConfig.swift`
-- Create: `Sources/QuickSnipCore/StorageProvider.swift`
-- Create: `Sources/QuickSnipCore/S3CompatProvider.swift`
-- Test: `Tests/QuickSnipCoreTests/S3CompatProviderTests.swift`
+- Create: `Sources/QuickNabCore/ProviderConfig.swift`
+- Create: `Sources/QuickNabCore/StorageProvider.swift`
+- Create: `Sources/QuickNabCore/S3CompatProvider.swift`
+- Test: `Tests/QuickNabCoreTests/S3CompatProviderTests.swift`
 
 **Interfaces:**
 - Consumes: `SigV4Signer`, `SigV4Credentials` (Task 3).
@@ -749,11 +749,11 @@ git commit -m "feat: unguessable base62 object-key generator"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/S3CompatProviderTests.swift`:
+`Tests/QuickNabCoreTests/S3CompatProviderTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class S3CompatProviderTests: XCTestCase {
     private let creds = SigV4Credentials(accessKeyID: "AKIDEXAMPLE", secretAccessKey: "SECRET")
@@ -838,7 +838,7 @@ Expected: FAIL — `ProviderConfig` / `S3CompatProvider` / `StorageProvider` not
 
 - [ ] **Step 3: Implement config, protocol, and provider**
 
-`Sources/QuickSnipCore/ProviderConfig.swift`:
+`Sources/QuickNabCore/ProviderConfig.swift`:
 
 ```swift
 import Foundation
@@ -869,7 +869,7 @@ public struct ProviderConfig: Equatable {
 }
 ```
 
-`Sources/QuickSnipCore/StorageProvider.swift`:
+`Sources/QuickNabCore/StorageProvider.swift`:
 
 ```swift
 import Foundation
@@ -882,7 +882,7 @@ public protocol StorageProvider {
 }
 ```
 
-`Sources/QuickSnipCore/S3CompatProvider.swift`:
+`Sources/QuickNabCore/S3CompatProvider.swift`:
 
 ```swift
 import Foundation
@@ -929,7 +929,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/ProviderConfig.swift Sources/QuickSnipCore/StorageProvider.swift Sources/QuickSnipCore/S3CompatProvider.swift Tests/QuickSnipCoreTests/S3CompatProviderTests.swift
+git add Sources/QuickNabCore/ProviderConfig.swift Sources/QuickNabCore/StorageProvider.swift Sources/QuickNabCore/S3CompatProvider.swift Tests/QuickNabCoreTests/S3CompatProviderTests.swift
 git commit -m "feat: S3-compatible provider with deterministic object/public URLs"
 ```
 
@@ -938,8 +938,8 @@ git commit -m "feat: S3-compatible provider with deterministic object/public URL
 ## Task 7: Object uploader (URLSession PUT)
 
 **Files:**
-- Create: `Sources/QuickSnipCore/ObjectUploader.swift`
-- Test: `Tests/QuickSnipCoreTests/ObjectUploaderTests.swift`
+- Create: `Sources/QuickNabCore/ObjectUploader.swift`
+- Test: `Tests/QuickNabCoreTests/ObjectUploaderTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -951,11 +951,11 @@ git commit -m "feat: S3-compatible provider with deterministic object/public URL
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/ObjectUploaderTests.swift` — uses a `URLProtocol` stub so no network is touched:
+`Tests/QuickNabCoreTests/ObjectUploaderTests.swift` — uses a `URLProtocol` stub so no network is touched:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class StubURLProtocol: URLProtocol {
     static var lastRequest: URLRequest?
@@ -1039,7 +1039,7 @@ Expected: FAIL — `URLSessionUploader` / `ObjectUploader` / `UploadError` not d
 
 - [ ] **Step 3: Implement the uploader**
 
-`Sources/QuickSnipCore/ObjectUploader.swift`:
+`Sources/QuickNabCore/ObjectUploader.swift`:
 
 ```swift
 import Foundation
@@ -1083,7 +1083,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/ObjectUploader.swift Tests/QuickSnipCoreTests/ObjectUploaderTests.swift
+git add Sources/QuickNabCore/ObjectUploader.swift Tests/QuickNabCoreTests/ObjectUploaderTests.swift
 git commit -m "feat: URLSession PUT object uploader behind a protocol"
 ```
 
@@ -1092,8 +1092,8 @@ git commit -m "feat: URLSession PUT object uploader behind a protocol"
 ## Task 8: Clipboard writer
 
 **Files:**
-- Create: `Sources/QuickSnipCore/ClipboardWriter.swift`
-- Test: `Tests/QuickSnipCoreTests/ClipboardWriterTests.swift`
+- Create: `Sources/QuickNabCore/ClipboardWriter.swift`
+- Test: `Tests/QuickNabCoreTests/ClipboardWriterTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -1104,16 +1104,16 @@ git commit -m "feat: URLSession PUT object uploader behind a protocol"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/ClipboardWriterTests.swift` — uses a uniquely named (non-general) pasteboard, so the developer's real clipboard is untouched:
+`Tests/QuickNabCoreTests/ClipboardWriterTests.swift` — uses a uniquely named (non-general) pasteboard, so the developer's real clipboard is untouched:
 
 ```swift
 import XCTest
 import AppKit
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class ClipboardWriterTests: XCTestCase {
     func testWritesURLStringAndTransientMarker() {
-        let pb = NSPasteboard(name: NSPasteboard.Name("com.quicksnip.test.\(UUID().uuidString)"))
+        let pb = NSPasteboard(name: NSPasteboard.Name("com.nab.test.\(UUID().uuidString)"))
         let writer = ClipboardWriter(pasteboard: pb)
 
         writer.writeURL(URL(string: "https://cdn.example.com/ab12cd.png")!)
@@ -1132,7 +1132,7 @@ Expected: FAIL — `ClipboardWriter` / `ClipboardWriting` not defined.
 
 - [ ] **Step 3: Implement the writer**
 
-`Sources/QuickSnipCore/ClipboardWriter.swift`:
+`Sources/QuickNabCore/ClipboardWriter.swift`:
 
 ```swift
 import Foundation
@@ -1167,7 +1167,7 @@ Expected: PASS (1 test).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/ClipboardWriter.swift Tests/QuickSnipCoreTests/ClipboardWriterTests.swift
+git add Sources/QuickNabCore/ClipboardWriter.swift Tests/QuickNabCoreTests/ClipboardWriterTests.swift
 git commit -m "feat: clipboard writer with transient pasteboard marker"
 ```
 
@@ -1176,9 +1176,9 @@ git commit -m "feat: clipboard writer with transient pasteboard marker"
 ## Task 9: Upload pipeline + optimistic-copy policy
 
 **Files:**
-- Create: `Sources/QuickSnipCore/UploadItem.swift`
-- Create: `Sources/QuickSnipCore/UploadPipeline.swift`
-- Test: `Tests/QuickSnipCoreTests/UploadPipelineTests.swift`
+- Create: `Sources/QuickNabCore/UploadItem.swift`
+- Create: `Sources/QuickNabCore/UploadPipeline.swift`
+- Test: `Tests/QuickNabCoreTests/UploadPipelineTests.swift`
 
 **Interfaces:**
 - Consumes: `StorageProvider` (Task 6), `ObjectUploader` (Task 7), `ClipboardWriting` (Task 8), `NamingScheme`/`KeyGenerator` (Task 5), `ContentType` (Task 4).
@@ -1191,11 +1191,11 @@ git commit -m "feat: clipboard writer with transient pasteboard marker"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/UploadPipelineTests.swift`:
+`Tests/QuickNabCoreTests/UploadPipelineTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 private final class FakeProvider: StorageProvider {
     func presignPutURL(key: String, expiresIn: Int, date: Date) throws -> URL {
@@ -1292,7 +1292,7 @@ Expected: FAIL — `UploadPipeline` / `UploadItem` / `UploadOutcome` not defined
 
 - [ ] **Step 3: Implement the models and pipeline**
 
-`Sources/QuickSnipCore/UploadItem.swift`:
+`Sources/QuickNabCore/UploadItem.swift`:
 
 ```swift
 import Foundation
@@ -1323,7 +1323,7 @@ public struct UploadOutcome: Equatable {
 }
 ```
 
-`Sources/QuickSnipCore/UploadPipeline.swift`:
+`Sources/QuickNabCore/UploadPipeline.swift`:
 
 ```swift
 import Foundation
@@ -1388,7 +1388,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/UploadItem.swift Sources/QuickSnipCore/UploadPipeline.swift Tests/QuickSnipCoreTests/UploadPipelineTests.swift
+git add Sources/QuickNabCore/UploadItem.swift Sources/QuickNabCore/UploadPipeline.swift Tests/QuickNabCoreTests/UploadPipelineTests.swift
 git commit -m "feat: upload pipeline with optimistic-clipboard correctness guard"
 ```
 
@@ -1397,8 +1397,8 @@ git commit -m "feat: upload pipeline with optimistic-clipboard correctness guard
 ## Task 10: Keychain credential store
 
 **Files:**
-- Create: `Sources/QuickSnipCore/KeychainStore.swift`
-- Test: `Tests/QuickSnipCoreTests/KeychainStoreTests.swift`
+- Create: `Sources/QuickNabCore/KeychainStore.swift`
+- Test: `Tests/QuickNabCoreTests/KeychainStoreTests.swift`
 
 **Interfaces:**
 - Consumes: `SigV4Credentials` (Task 3).
@@ -1408,18 +1408,18 @@ git commit -m "feat: upload pipeline with optimistic-clipboard correctness guard
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/KeychainStoreTests.swift` — uses a unique service name per run and cleans up, so it never collides with real credentials:
+`Tests/QuickNabCoreTests/KeychainStoreTests.swift` — uses a unique service name per run and cleans up, so it never collides with real credentials:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class KeychainStoreTests: XCTestCase {
     private var store: KeychainStore!
     private let providerID = "test-provider"
 
     override func setUp() {
-        store = KeychainStore(service: "com.quicksnip.tests.\(UUID().uuidString)")
+        store = KeychainStore(service: "com.nab.tests.\(UUID().uuidString)")
     }
 
     override func tearDown() {
@@ -1459,7 +1459,7 @@ Expected: FAIL — `KeychainStore` not defined.
 
 - [ ] **Step 3: Implement the store**
 
-`Sources/QuickSnipCore/KeychainStore.swift`:
+`Sources/QuickNabCore/KeychainStore.swift`:
 
 ```swift
 import Foundation
@@ -1478,7 +1478,7 @@ public struct KeychainStore {
 
     private let service: String
 
-    public init(service: String = "com.quicksnip.credentials") {
+    public init(service: String = "com.nab.credentials") {
         self.service = service
     }
 
@@ -1539,7 +1539,7 @@ Expected: PASS (4 tests). On first run macOS may prompt to allow the test binary
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/KeychainStore.swift Tests/QuickSnipCoreTests/KeychainStoreTests.swift
+git add Sources/QuickNabCore/KeychainStore.swift Tests/QuickNabCoreTests/KeychainStoreTests.swift
 git commit -m "feat: Keychain credential store keyed by provider id"
 ```
 
@@ -1548,8 +1548,8 @@ git commit -m "feat: Keychain credential store keyed by provider id"
 ## Task 11: Capture command builder
 
 **Files:**
-- Create: `Sources/QuickSnipCore/CaptureCommand.swift`
-- Test: `Tests/QuickSnipCoreTests/CaptureCommandTests.swift`
+- Create: `Sources/QuickNabCore/CaptureCommand.swift`
+- Test: `Tests/QuickNabCoreTests/CaptureCommandTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -1560,11 +1560,11 @@ git commit -m "feat: Keychain credential store keyed by provider id"
 
 - [ ] **Step 1: Write the failing test**
 
-`Tests/QuickSnipCoreTests/CaptureCommandTests.swift`:
+`Tests/QuickNabCoreTests/CaptureCommandTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickSnipCore
+@testable import QuickNabCore
 
 final class CaptureCommandTests: XCTestCase {
     func testRegionIsInteractive() {
@@ -1591,7 +1591,7 @@ Expected: FAIL — `CaptureCommand` / `CaptureMode` not defined.
 
 - [ ] **Step 3: Implement the builder**
 
-`Sources/QuickSnipCore/CaptureCommand.swift`:
+`Sources/QuickNabCore/CaptureCommand.swift`:
 
 ```swift
 import Foundation
@@ -1624,7 +1624,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnipCore/CaptureCommand.swift Tests/QuickSnipCoreTests/CaptureCommandTests.swift
+git add Sources/QuickNabCore/CaptureCommand.swift Tests/QuickNabCoreTests/CaptureCommandTests.swift
 git commit -m "feat: screencapture argument-vector builder"
 ```
 
@@ -1633,8 +1633,8 @@ git commit -m "feat: screencapture argument-vector builder"
 ## Task 12: App entry + accessory activation
 
 **Files:**
-- Modify: `Sources/QuickSnip/main.swift`
-- Create: `Sources/QuickSnip/AppDelegate.swift`
+- Modify: `Sources/Nab/main.swift`
+- Create: `Sources/Nab/AppDelegate.swift`
 
 **Interfaces:**
 - Consumes: nothing from Core yet (wiring lands in Task 16).
@@ -1644,7 +1644,7 @@ git commit -m "feat: screencapture argument-vector builder"
 
 - [ ] **Step 1: Replace `main.swift`**
 
-`Sources/QuickSnip/main.swift`:
+`Sources/Nab/main.swift`:
 
 ```swift
 import AppKit
@@ -1657,7 +1657,7 @@ app.run()
 
 - [ ] **Step 2: Create `AppDelegate`**
 
-`Sources/QuickSnip/AppDelegate.swift`:
+`Sources/Nab/AppDelegate.swift`:
 
 ```swift
 import AppKit
@@ -1666,7 +1666,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menubar agent: no dock icon, no app menu (runtime equivalent of LSUIElement).
         NSApp.setActivationPolicy(.accessory)
-        NSLog("QuickSnip launched as accessory agent")
+        NSLog("Nab launched as accessory agent")
     }
 }
 ```
@@ -1676,13 +1676,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 Run: `swift build`
 Expected: build succeeds.
 
-Run: `swift run QuickSnip` (leave it running ~3 seconds, then Ctrl-C).
-Expected: no crash; no Dock icon appears for the process; the log line `QuickSnip launched as accessory agent` prints. (There is no menubar item yet — that is Task 13.)
+Run: `swift run Nab` (leave it running ~3 seconds, then Ctrl-C).
+Expected: no crash; no Dock icon appears for the process; the log line `Nab launched as accessory agent` prints. (There is no menubar item yet — that is Task 13.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/QuickSnip/main.swift Sources/QuickSnip/AppDelegate.swift
+git add Sources/Nab/main.swift Sources/Nab/AppDelegate.swift
 git commit -m "feat: menubar-agent app entry point with accessory activation policy"
 ```
 
@@ -1691,8 +1691,8 @@ git commit -m "feat: menubar-agent app entry point with accessory activation pol
 ## Task 13: Menubar status item
 
 **Files:**
-- Create: `Sources/QuickSnip/MenuBarController.swift`
-- Modify: `Sources/QuickSnip/AppDelegate.swift`
+- Create: `Sources/Nab/MenuBarController.swift`
+- Modify: `Sources/Nab/AppDelegate.swift`
 
 **Interfaces:**
 - Consumes: nothing from Core.
@@ -1700,7 +1700,7 @@ git commit -m "feat: menubar-agent app entry point with accessory activation pol
 
 - [ ] **Step 1: Create `MenuBarController`**
 
-`Sources/QuickSnip/MenuBarController.swift`:
+`Sources/Nab/MenuBarController.swift`:
 
 ```swift
 import AppKit
@@ -1736,7 +1736,7 @@ final class MenuBarController {
         case .success:   symbol = "checkmark.circle"
         case .error:     symbol = "exclamationmark.triangle"
         }
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "QuickSnip")
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Nab")
         button.image?.isTemplate = true
     }
 
@@ -1754,7 +1754,7 @@ final class MenuBarController {
         menu.addItem(full)
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit QuickSnip", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Nab", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     @objc private func captureRegion() { onCaptureRegion?() }
@@ -1765,7 +1765,7 @@ final class MenuBarController {
 
 - [ ] **Step 2: Hold the controller in `AppDelegate`**
 
-Replace `Sources/QuickSnip/AppDelegate.swift`:
+Replace `Sources/Nab/AppDelegate.swift`:
 
 ```swift
 import AppKit
@@ -1776,7 +1776,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         menuBar = MenuBarController()
-        NSLog("QuickSnip launched as accessory agent")
+        NSLog("Nab launched as accessory agent")
     }
 }
 ```
@@ -1784,13 +1784,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 - [ ] **Step 3: Build and smoke-test manually**
 
 Run: `swift build` → succeeds.
-Run: `swift run QuickSnip`.
-Expected: a camera icon appears in the macOS menu bar. Clicking it shows the menu with "Capture Region / Window / Full Screen", a separator, and "Quit QuickSnip". "Quit QuickSnip" terminates the app. (Capture items do nothing yet — wired in Task 16.)
+Run: `swift run Nab`.
+Expected: a camera icon appears in the macOS menu bar. Clicking it shows the menu with "Capture Region / Window / Full Screen", a separator, and "Quit Nab". "Quit Nab" terminates the app. (Capture items do nothing yet — wired in Task 16.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/QuickSnip/MenuBarController.swift Sources/QuickSnip/AppDelegate.swift
+git add Sources/Nab/MenuBarController.swift Sources/Nab/AppDelegate.swift
 git commit -m "feat: NSStatusItem menubar controller with capture menu"
 ```
 
@@ -1799,8 +1799,8 @@ git commit -m "feat: NSStatusItem menubar controller with capture menu"
 ## Task 14: Toast HUD + capture service
 
 **Files:**
-- Create: `Sources/QuickSnip/ToastController.swift`
-- Create: `Sources/QuickSnip/CaptureService.swift`
+- Create: `Sources/Nab/ToastController.swift`
+- Create: `Sources/Nab/CaptureService.swift`
 
 **Interfaces:**
 - Consumes: `CaptureCommand`, `CaptureMode` (Task 11).
@@ -1811,7 +1811,7 @@ git commit -m "feat: NSStatusItem menubar controller with capture menu"
 
 - [ ] **Step 1: Create `ToastController`**
 
-`Sources/QuickSnip/ToastController.swift`:
+`Sources/Nab/ToastController.swift`:
 
 ```swift
 import AppKit
@@ -1887,11 +1887,11 @@ final class ToastController {
 
 - [ ] **Step 2: Create `CaptureService`**
 
-`Sources/QuickSnip/CaptureService.swift`:
+`Sources/Nab/CaptureService.swift`:
 
 ```swift
 import Foundation
-import QuickSnipCore
+import QuickNabCore
 
 final class CaptureService {
     enum CaptureError: Error { case cancelledOrEmpty, launchFailed }
@@ -1900,7 +1900,7 @@ final class CaptureService {
     /// file when the user presses Escape, which we surface as cancelledOrEmpty.
     func capture(mode: CaptureMode) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
-        let output = dir.appendingPathComponent("quicksnip-\(UUID().uuidString).png")
+        let output = dir.appendingPathComponent("nab-\(UUID().uuidString).png")
         let args = CaptureCommand.arguments(mode: mode, outputPath: output.path)
 
         let process = Process()
@@ -1931,7 +1931,7 @@ Expected: build succeeds. (These classes are exercised end-to-end in Task 16.)
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/QuickSnip/ToastController.swift Sources/QuickSnip/CaptureService.swift
+git add Sources/Nab/ToastController.swift Sources/Nab/CaptureService.swift
 git commit -m "feat: toast HUD panel and screencapture service"
 ```
 
@@ -1940,7 +1940,7 @@ git commit -m "feat: toast HUD panel and screencapture service"
 ## Task 15: Global hotkeys
 
 **Files:**
-- Create: `Sources/QuickSnip/HotkeyManager.swift`
+- Create: `Sources/Nab/HotkeyManager.swift`
 
 **Interfaces:**
 - Consumes: `KeyboardShortcuts` package.
@@ -1951,7 +1951,7 @@ git commit -m "feat: toast HUD panel and screencapture service"
 
 - [ ] **Step 1: Create `HotkeyManager`**
 
-`Sources/QuickSnip/HotkeyManager.swift`:
+`Sources/Nab/HotkeyManager.swift`:
 
 ```swift
 import Foundation
@@ -1984,7 +1984,7 @@ Expected: build succeeds (resolves `KeyboardShortcuts`). Hotkeys are activated a
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/QuickSnip/HotkeyManager.swift
+git add Sources/Nab/HotkeyManager.swift
 git commit -m "feat: global capture hotkeys via KeyboardShortcuts"
 ```
 
@@ -1993,8 +1993,8 @@ git commit -m "feat: global capture hotkeys via KeyboardShortcuts"
 ## Task 16: End-to-end wiring + dev config
 
 **Files:**
-- Create: `Sources/QuickSnip/DevConfig.swift`
-- Modify: `Sources/QuickSnip/AppDelegate.swift`
+- Create: `Sources/Nab/DevConfig.swift`
+- Modify: `Sources/Nab/AppDelegate.swift`
 
 **Interfaces:**
 - Consumes: `MenuBarController` (T13), `ToastController`/`CaptureService` (T14), `HotkeyManager` (T15), `UploadPipeline`/`UploadItem` (T9), `S3CompatProvider`/`ProviderConfig` (T6), `URLSessionUploader` (T7), `ClipboardWriter` (T8), `KeychainStore` (T10), `NamingScheme` (T5).
@@ -2004,35 +2004,35 @@ git commit -m "feat: global capture hotkeys via KeyboardShortcuts"
 
 - [ ] **Step 1: Create `DevConfig`**
 
-`Sources/QuickSnip/DevConfig.swift`:
+`Sources/Nab/DevConfig.swift`:
 
 ```swift
 import Foundation
-import QuickSnipCore
+import QuickNabCore
 
 /// Throwaway configuration for the M0+M1 end-to-end smoke test. Reads the
 /// active provider from environment variables. Replaced by the guided
 /// R2 wizard in M3. Required env vars:
-///   QS_ENDPOINT, QS_REGION, QS_BUCKET, QS_ACCESS_KEY, QS_SECRET_KEY
-/// Optional: QS_PUBLIC_BASE, QS_PATH_STYLE (default "1"), QS_KIND (default "r2")
+///   NAB_ENDPOINT, NAB_REGION, NAB_BUCKET, NAB_ACCESS_KEY, NAB_SECRET_KEY
+/// Optional: NAB_PUBLIC_BASE, NAB_PATH_STYLE (default "1"), NAB_KIND (default "r2")
 enum DevConfig {
     static func load() -> (config: ProviderConfig, credentials: SigV4Credentials)? {
         let env = ProcessInfo.processInfo.environment
-        guard let endpoint = env["QS_ENDPOINT"].flatMap(URL.init(string:)),
-              let region = env["QS_REGION"],
-              let bucket = env["QS_BUCKET"],
-              let access = env["QS_ACCESS_KEY"],
-              let secret = env["QS_SECRET_KEY"] else {
+        guard let endpoint = env["NAB_ENDPOINT"].flatMap(URL.init(string:)),
+              let region = env["NAB_REGION"],
+              let bucket = env["NAB_BUCKET"],
+              let access = env["NAB_ACCESS_KEY"],
+              let secret = env["NAB_SECRET_KEY"] else {
             return nil
         }
         let config = ProviderConfig(
             id: "dev",
-            kind: ProviderKind(rawValue: env["QS_KIND"] ?? "r2") ?? .r2,
+            kind: ProviderKind(rawValue: env["NAB_KIND"] ?? "r2") ?? .r2,
             endpoint: endpoint,
             region: region,
             bucket: bucket,
-            pathStyle: (env["QS_PATH_STYLE"] ?? "1") != "0",
-            publicBase: env["QS_PUBLIC_BASE"].flatMap(URL.init(string:))
+            pathStyle: (env["NAB_PATH_STYLE"] ?? "1") != "0",
+            publicBase: env["NAB_PUBLIC_BASE"].flatMap(URL.init(string:))
         )
         return (config, SigV4Credentials(accessKeyID: access, secretAccessKey: secret))
     }
@@ -2041,11 +2041,11 @@ enum DevConfig {
 
 - [ ] **Step 2: Wire everything in `AppDelegate`**
 
-Replace `Sources/QuickSnip/AppDelegate.swift`:
+Replace `Sources/Nab/AppDelegate.swift`:
 
 ```swift
 import AppKit
-import QuickSnipCore
+import QuickNabCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
@@ -2075,12 +2075,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.onFullScreen = full
         hotkeys.register()
 
-        NSLog("QuickSnip ready")
+        NSLog("Nab ready")
     }
 
     private func configurePipeline() {
         guard let dev = DevConfig.load() else {
-            toast.show(message: "No provider configured (set QS_* env vars)", style: .error)
+            toast.show(message: "No provider configured (set NAB_* env vars)", style: .error)
             return
         }
         let provider = S3CompatProvider(config: dev.config, credentials: dev.credentials)
@@ -2138,13 +2138,13 @@ Expected: all Core tests PASS (Tasks 1–11).
 Prereq: an S3-compatible bucket (R2 recommended) with CORS allowing `PUT`, and scoped credentials. Export env vars, then run:
 
 ```bash
-export QS_ENDPOINT="https://<account>.r2.cloudflarestorage.com"
-export QS_REGION="auto"
-export QS_BUCKET="<your-bucket>"
-export QS_ACCESS_KEY="<access-key>"
-export QS_SECRET_KEY="<secret-key>"
-export QS_PUBLIC_BASE="https://<your-public-base>"   # optional
-swift run QuickSnip
+export NAB_ENDPOINT="https://<account>.r2.cloudflarestorage.com"
+export NAB_REGION="auto"
+export NAB_BUCKET="<your-bucket>"
+export NAB_ACCESS_KEY="<access-key>"
+export NAB_SECRET_KEY="<secret-key>"
+export NAB_PUBLIC_BASE="https://<your-public-base>"   # optional
+swift run Nab
 ```
 
 Then:
@@ -2153,12 +2153,12 @@ Then:
 3. Expected: an "Uploading…" toast, then a green "Link copied" toast; the menubar icon cycles idle→uploading→success→idle.
 4. Paste (⌘V) into any text field — a URL like `https://<public-base>/<10-char-slug>.png` appears.
 5. Open that URL in a browser — the screenshot loads.
-6. Confirm the temp file is gone: `ls $TMPDIR/quicksnip-*.png` returns no matches.
+6. Confirm the temp file is gone: `ls $TMPDIR/nab-*.png` returns no matches.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/QuickSnip/DevConfig.swift Sources/QuickSnip/AppDelegate.swift
+git add Sources/Nab/DevConfig.swift Sources/Nab/AppDelegate.swift
 git commit -m "feat: end-to-end capture → presign → upload → optimistic clipboard → toast"
 ```
 
@@ -2189,7 +2189,7 @@ git commit -m "feat: end-to-end capture → presign → upload → optimistic cl
 
 ## Execution Handoff
 
-**Plan complete and saved to `docs/superpowers/plans/2026-06-26-quicksnip-foundation.md`. Two execution options:**
+**Plan complete and saved to `docs/superpowers/plans/2026-06-26-nab-foundation.md`. Two execution options:**
 
 **1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 

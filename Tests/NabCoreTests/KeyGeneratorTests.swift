@@ -1,5 +1,5 @@
 import XCTest
-@testable import SnipCore
+@testable import NabCore
 
 // Deterministic RNG so we can assert exact slugs.
 struct SeededRNG: RandomNumberGenerator {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import SnipCore
+@testable import NabCore
 
 private final class FakeProvider: StorageProvider {
     func presignPutURL(key: String, expiresIn: Int, date: Date) throws -> URL {

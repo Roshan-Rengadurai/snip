@@ -26,7 +26,7 @@ final class UploadHistory: ObservableObject {
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Snip", isDirectory: true)
+            .appendingPathComponent("Nab", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         fileURL = base.appendingPathComponent("history.json")
         load()

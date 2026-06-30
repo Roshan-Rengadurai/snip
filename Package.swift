@@ -2,24 +2,24 @@
 import PackageDescription
 
 let package = Package(
-    name: "Snip",
+    name: "Nab",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "Snip", targets: ["Snip"]),
-        .library(name: "SnipCore", targets: ["SnipCore"]),
+        .executable(name: "Nab", targets: ["Nab"]),
+        .library(name: "NabCore", targets: ["NabCore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.2.1"),
     ],
     targets: [
-        .target(name: "SnipCore"),
+        .target(name: "NabCore"),
         .executableTarget(
-            name: "Snip",
+            name: "Nab",
             dependencies: [
-                "SnipCore",
+                "NabCore",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
             ]
         ),
-        .testTarget(name: "SnipCoreTests", dependencies: ["SnipCore"]),
+        .testTarget(name: "NabCoreTests", dependencies: ["NabCore"]),
     ]
 )

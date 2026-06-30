@@ -1,5 +1,5 @@
 import XCTest
-@testable import SnipCore
+@testable import NabCore
 
 final class S3CompatProviderTests: XCTestCase {
     private let creds = SigV4Credentials(accessKeyID: "AKIDEXAMPLE", secretAccessKey: "SECRET")

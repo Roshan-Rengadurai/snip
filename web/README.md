@@ -1,4 +1,4 @@
-# Snip — Website
+# Nab — Website
 
 Marketing landing + download redirect + license-verify endpoint. Next.js 15
 (App Router) + Tailwind v4. Deploy target: Vercel.
@@ -16,13 +16,13 @@ npm run build    # production build
 
 - `/` — landing page (static)
 - `GET /api/download` — 302 → latest macOS asset from GitHub Releases
-- `POST /api/license/verify` — `{ "key": "QS-XXXX-XXXX-XXXX" }` → `{ valid, plan }`
+- `POST /api/license/verify` — `{ "key": "NB-XXXX-XXXX-XXXX" }` → `{ valid, plan }`
 
 ## Environment
 
 | Var | Purpose |
 |---|---|
-| `GITHUB_REPO` | `owner/repo` for download redirect (e.g. `you/snip`) |
+| `GITHUB_REPO` | `owner/repo` for download redirect (e.g. `you/nab`) |
 
 Set in Vercel: Project → Settings → Environment Variables.
 

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Reveal from "../Reveal";
 
 export const metadata: Metadata = {
-  title: "Snip — Setup guide",
+  title: "Nab — Setup guide",
   description:
-    "Install Snip, grant permissions, connect a bucket (Cloudflare R2 or local MinIO), and start sharing.",
+    "Install Nab, grant permissions, connect a bucket (Cloudflare R2 or local MinIO), and start sharing.",
 };
 
 function Terminal({
@@ -63,7 +63,7 @@ export default function Docs() {
       <header className="sticky top-0 z-40 border-b border-bg1/80 bg-bg0/80 backdrop-blur">
         <nav className="mx-auto flex max-w-4xl items-center justify-between px-5 py-3">
           <a href="/" className="font-mono text-sm font-semibold tracking-tight text-fg0">
-            <span className="text-orange">~/</span>snip
+            <span className="text-orange">~/</span>nab
             <span className="text-gray">/docs</span>
           </a>
           <div className="flex items-center gap-4 font-mono text-xs sm:text-sm">
@@ -80,16 +80,16 @@ export default function Docs() {
         </nav>
       </header>
 
-      <main className="bg-grain relative mx-auto max-w-4xl px-5">
+      <main className="relative mx-auto max-w-4xl px-5">
         <div className="bg-ambient absolute inset-0 -z-10" />
 
         <section className="animate-rise pb-8 pt-16">
           <p className="font-mono text-sm text-orange">// setup guide</p>
           <h1 className="mt-2 font-mono text-4xl font-bold tracking-tight text-fg0">
-            From zero to one snip.
+            From zero to one nab.
           </h1>
           <P>
-            Snip captures a region or your text selection and drops a clean
+            Nab captures a region or your text selection and drops a clean
             link onto your clipboard — to your own bucket. Here&apos;s the
             90-second setup.
           </P>
@@ -98,7 +98,7 @@ export default function Docs() {
         <Reveal>
           <Step n={1} title="Install">
             <P>
-              Download the latest build and drag Snip to Applications. Launch
+              Download the latest build and drag Nab to Applications. Launch
               it — a scissors icon appears in your menubar (no dock icon).
             </P>
             <Terminal title="first launch">
@@ -135,7 +135,7 @@ export default function Docs() {
         <Reveal>
           <Step n={3} title="Connect storage">
             <P>
-              Point Snip at any S3-compatible bucket. Cloudflare R2 is the
+              Point Nab at any S3-compatible bucket. Cloudflare R2 is the
               recommended path (zero egress, generous free tier). Want to try it
               with no account? Use a local MinIO bucket.
             </P>
@@ -169,13 +169,13 @@ Path-style      ON`}
               {`brew install minio/stable/minio minio/stable/mc
 
 # start a local S3 server
-MINIO_ROOT_USER=snip MINIO_ROOT_PASSWORD=snip1234 \\
-  minio server ~/.snip-minio --address :9000 --console-address :9001
+MINIO_ROOT_USER=nab MINIO_ROOT_PASSWORD=nab12345 \\
+  minio server ~/.nab-minio --address :9000 --console-address :9001
 
 # create a public-read bucket
-mc alias set snipdev http://localhost:9000 snip snip1234
-mc mb snipdev/shots
-mc anonymous set download snipdev/shots`}
+mc alias set nabdev http://localhost:9000 nab nab12345
+mc mb nabdev/shots
+mc anonymous set download nabdev/shots`}
             </Terminal>
             <P>
               Then in Settings → Storage click{" "}
@@ -207,6 +207,11 @@ mc anonymous set download snipdev/shots`}
                 same actions plus Settings, anytime.
               </li>
             </ul>
+            <P>
+              The link previews inline the moment you paste it into Discord or
+              Slack — no extra steps. Nab-hosted links expire after 30 days;
+              links to your own bucket last as long as the object does.
+            </P>
             <P>
               Tune the gesture timing, toast position, naming, and more in
               Settings. Every upload is logged locally under History — re-copy,
@@ -242,7 +247,7 @@ mc anonymous set download snipdev/shots`}
             <span className="rounded bg-orange px-2 py-0.5 font-semibold text-bg0-hard">
               NORMAL
             </span>
-            <span className="text-fg1">snip 0.1.0</span>
+            <span className="text-fg1">nab 0.1.0</span>
             <span className="text-gray">setup guide</span>
             <a href="/" className="ml-auto cursor-pointer text-gray hover:text-fg0">
               ~/home

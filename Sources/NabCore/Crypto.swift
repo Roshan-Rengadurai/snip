@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 /// Marker used by the package smoke test in Task 1.
-public enum SnipCore {
+public enum NabCore {
     public static let packageIsWired = true
 }
 

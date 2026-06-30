@@ -1,9 +1,9 @@
 import Foundation
 import SwiftUI
-import SnipCore
+import NabCore
 
 extension Notification.Name {
-    static let snipPreviewToast = Notification.Name("snipPreviewToast")
+    static let nabPreviewToast = Notification.Name("nabPreviewToast")
 }
 
 /// Observable settings store. Scalars persist to UserDefaults; the secret
@@ -11,6 +11,7 @@ extension Notification.Name {
 final class AppSettings: ObservableObject {
     private let d = UserDefaults.standard
     private let secretAccount = "secretAccessKey"
+    private let nabKeyAccount = "nabLicenseKey"
 
     // General
     @Published var launchAtLogin: Bool { didSet { d.set(launchAtLogin, forKey: "launchAtLogin") } }
@@ -25,6 +26,30 @@ final class AppSettings: ObservableObject {
     @Published var accessKey: String { didSet { d.set(accessKey, forKey: "accessKey") } }
     @Published var publicBase: String { didSet { d.set(publicBase, forKey: "publicBase") } }
     @Published var pathStyle: Bool { didSet { d.set(pathStyle, forKey: "pathStyle") } }
+
+    // Nab hosting (zero-config, hosted by the web app)
+    @Published var useNabHosting: Bool { didSet { d.set(useNabHosting, forKey: "useNabHosting") } }
+    @Published var nabApiBase: String { didSet { d.set(nabApiBase, forKey: "nabApiBase") } }
+    @Published var nabExpiry: String { didSet { d.set(nabExpiry, forKey: "nabExpiry") } } // never|1h|1d|7d|30d
+
+    /// Nab license key — Keychain only, never UserDefaults.
+    @Published var nabLicenseKey: String {
+        didSet {
+            if nabLicenseKey.isEmpty { KeychainStore.shared.delete(account: nabKeyAccount) }
+            else { KeychainStore.shared.set(nabLicenseKey, account: nabKeyAccount) }
+        }
+    }
+
+    /// Selected link-expiry as seconds for the upload request; 0 = never.
+    var nabExpirySeconds: Int {
+        switch nabExpiry {
+        case "never": return 0
+        case "1h": return 3600
+        case "1d": return 86_400
+        case "7d": return 604_800
+        default: return 2_592_000 // 30d
+        }
+    }
 
     /// Secret access key — read/write straight to Keychain, never UserDefaults.
     @Published var secretKey: String {
@@ -56,6 +81,9 @@ final class AppSettings: ObservableObject {
     // Text highlight share (double-tap Control)
     @Published var textShareEnabled: Bool { didSet { d.set(textShareEnabled, forKey: "textShareEnabled") } }
 
+    /// Hold ⇧ while double-tapping to skip the styled window and share raw text.
+    @Published var shiftRawShare: Bool { didSet { d.set(shiftRawShare, forKey: "shiftRawShare") } }
+
     // Onboarding
     @Published var hasOnboarded: Bool { didSet { d.set(hasOnboarded, forKey: "hasOnboarded") } }
 
@@ -82,8 +110,13 @@ final class AppSettings: ObservableObject {
         toastDuration = d.object(forKey: "toastDuration") as? Double ?? 2.2
         toastFollowCursor = d.bool(forKey: "toastFollowCursor")
         textShareEnabled = d.object(forKey: "textShareEnabled") as? Bool ?? true
+        shiftRawShare = d.object(forKey: "shiftRawShare") as? Bool ?? true
         hasOnboarded = d.bool(forKey: "hasOnboarded")
         secretKey = KeychainStore.shared.get(account: secretAccount) ?? ""
+        useNabHosting = d.bool(forKey: "useNabHosting")
+        nabApiBase = d.string(forKey: "nabApiBase") ?? "https://trynab.vercel.app"
+        nabExpiry = d.string(forKey: "nabExpiry") ?? "30d"
+        nabLicenseKey = KeychainStore.shared.get(account: nabKeyAccount) ?? ""
     }
 
     /// True when enough is configured to attempt an upload.
@@ -114,15 +147,15 @@ final class AppSettings: ObservableObject {
         NamingScheme(slugLength: Int(slugLength), datePrefix: datePrefix)
     }
 
-    /// Fill in the local MinIO dev target (see `~/.snip-minio`).
+    /// Fill in the local MinIO dev target (see `~/.nab-minio`).
     /// Dev-only credentials — never reuse for a real bucket.
     func loadLocalDevConfig() {
         providerKind = "minio"
         endpoint = "http://localhost:9000"
         bucket = "shots"
         region = "us-east-1"
-        accessKey = "snip"
-        secretKey = "snip1234" // MinIO requires the secret to be >= 8 chars
+        accessKey = "nab"
+        secretKey = "nab12345" // MinIO requires the secret to be >= 8 chars
         publicBase = ""
         pathStyle = true
     }

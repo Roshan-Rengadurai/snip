@@ -1,5 +1,5 @@
 import XCTest
-@testable import SnipCore
+@testable import NabCore
 
 final class CryptoTests: XCTestCase {
     // NIST/standard known answers.

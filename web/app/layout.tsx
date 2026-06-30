@@ -15,7 +15,7 @@ const sans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Snip — Snip it. It's already on your clipboard.",
+  title: "Nab — Nab it. It's already on your clipboard.",
   description:
     "A menubar macOS utility that turns a capture into a clean link on your clipboard — hosted in your own object storage. Bring your own bucket. We never see your bytes.",
 };

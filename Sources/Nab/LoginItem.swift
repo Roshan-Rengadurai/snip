@@ -15,7 +15,7 @@ enum LoginItem {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            NSLog("Snip login item update failed: \(error.localizedDescription)")
+            NSLog("Nab login item update failed: \(error.localizedDescription)")
         }
     }
 }

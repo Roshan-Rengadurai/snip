@@ -1,10 +1,10 @@
 import XCTest
 import AppKit
-@testable import SnipCore
+@testable import NabCore
 
 final class ClipboardWriterTests: XCTestCase {
     func testWritesURLStringAndTransientMarker() {
-        let pb = NSPasteboard(name: NSPasteboard.Name("com.snip.test.\(UUID().uuidString)"))
+        let pb = NSPasteboard(name: NSPasteboard.Name("com.nab.test.\(UUID().uuidString)"))
         let writer = ClipboardWriter(pasteboard: pb)
 
         writer.writeURL(URL(string: "https://cdn.example.com/ab12cd.png")!)

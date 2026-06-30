@@ -4,7 +4,7 @@ import Security
 /// Minimal Keychain wrapper for the bucket secret (plan Task 10 / spec §21).
 /// The secret access key never touches UserDefaults or the history DB.
 struct KeychainStore {
-    static let shared = KeychainStore(service: "com.snip.credentials")
+    static let shared = KeychainStore(service: "com.nab.credentials")
     let service: String
 
     func set(_ value: String, account: String) {
@@ -41,5 +41,17 @@ struct KeychainStore {
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    /// Touch the keychain at startup so the app loads — and is granted access to —
+    /// its stored credentials under the `nab.credentials` service.
+    func prime() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ]
+        SecItemCopyMatching(query as CFDictionary, nil)
     }
 }

@@ -3,9 +3,15 @@ import AppKit
 /// Global "tap a modifier twice" gestures via a passive CGEventTap:
 /// double-⌘ (capture) and double-⌃ (text share). Requires Accessibility
 /// permission. Listen-only — never swallows the user's events.
+///
+/// Shift is allowed to ride along on the gesture: the fire callbacks receive
+/// whether Shift was held on the triggering tap, so callers can offer a
+/// "raw" variant (skip the styled window). Control / Option still disqualify.
 final class HotkeyMonitor {
-    var onCommandDouble: (() -> Void)?
-    var onControlDouble: (() -> Void)?
+    /// Fired on double-⌘. Bool = was Shift held on the second tap.
+    var onCommandDouble: ((Bool) -> Void)?
+    /// Fired on double-⌃. Bool = was Shift held on the second tap.
+    var onControlDouble: ((Bool) -> Void)?
     /// Max seconds between the two taps (read live from settings).
     var gapProvider: () -> TimeInterval = { 0.3 }
 
@@ -67,21 +73,23 @@ final class HotkeyMonitor {
         guard type == .flagsChanged else { return }
 
         let flags = event.flags
-        process(modifier: .maskCommand, others: [.maskShift, .maskControl, .maskAlternate],
+        // Shift is intentionally NOT a disqualifier — it rides along as the "raw" modifier.
+        process(modifier: .maskCommand, others: [.maskControl, .maskAlternate],
                 flags: flags, state: &cmd, fire: onCommandDouble)
-        process(modifier: .maskControl, others: [.maskShift, .maskCommand, .maskAlternate],
+        process(modifier: .maskControl, others: [.maskCommand, .maskAlternate],
                 flags: flags, state: &ctrl, fire: onControlDouble)
     }
 
     private func process(modifier: CGEventFlags, others: CGEventFlags,
-                         flags: CGEventFlags, state: inout ModState, fire: (() -> Void)?) {
+                         flags: CGEventFlags, state: inout ModState, fire: ((Bool) -> Void)?) {
         let down = flags.contains(modifier)
+        let shift = flags.contains(.maskShift)
         let only = flags.intersection(others).isEmpty
         if down && !state.wasDown {
             let now = CFAbsoluteTimeGetCurrent()
             if state.armed, only, now - state.last <= gapProvider() {
                 state.armed = false
-                DispatchQueue.main.async { fire?() }
+                DispatchQueue.main.async { fire?(shift) }
             } else {
                 state.armed = only
             }

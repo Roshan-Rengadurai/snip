@@ -7,6 +7,8 @@
 .impeccable/
 .claude/
 .superpowers/
+.agents/
+skills-lock.json
 
 .vscode
 
@@ -22,3 +24,6 @@ DerivedData/
 
 # scratch / local data
 *.log
+
+# Vercel (repo-root link used when deploying web/ from here)
+.vercel

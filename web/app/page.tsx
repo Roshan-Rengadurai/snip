@@ -12,7 +12,7 @@ export default function Home() {
             href="#top"
             className="font-mono text-sm font-semibold tracking-tight text-fg0"
           >
-            <span className="text-orange">~/</span>snip
+            <span className="text-orange">~/</span>nab
             <span className="ml-0.5 inline-block animate-blink text-orange">
               ▋
             </span>
@@ -46,14 +46,14 @@ export default function Home() {
               macOS menubar utility
             </span>
             <h1 className="mt-5 text-[clamp(2.5rem,6vw,4rem)] font-bold leading-[1.05] tracking-tight text-fg0">
-              <span className="text-underline-draw">Snip</span> it. It&apos;s
+              <span className="text-underline-draw">Nab</span> it. It&apos;s
               already on your{" "}
               <span className="text-shimmer">clipboard</span>.
             </h1>
             <p className="mt-6 max-w-md text-lg leading-relaxed text-fg1">
               A menubar capture tool that drops a clean link onto your clipboard
-              the instant you snip. Use Snip hosting out of the box, or
-              bring your own R2 / S3 bucket.
+              the instant you nab — and it previews inline in Discord and Slack.
+              Use Nab hosting out of the box, or bring your own R2 / S3 bucket.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a
@@ -86,17 +86,17 @@ export default function Home() {
           <section className="px-6 pb-28">
             <div className="bg-ambient mx-auto max-w-3xl rounded-2xl border border-bg2 bg-bg0-hard/40 px-8 py-16 text-center">
               <h2 className="text-3xl font-bold tracking-tight text-fg0 sm:text-4xl">
-                Start snipping in seconds.
+                Start nabbing in seconds.
               </h2>
               <p className="mx-auto mt-4 max-w-lg text-lg leading-relaxed text-fg3">
-                Use Snip hosting out of the box — nothing to set up. Want to
+                Use Nab hosting out of the box — nothing to set up. Want to
                 self-host? Connect your own R2 / S3 bucket in 90 seconds.
               </p>
               <a
                 href="/api/download"
                 className="btn-lift btn-glow mt-9 inline-flex items-center gap-2 rounded-lg bg-orange px-7 py-3 text-sm font-semibold text-bg0-hard hover:bg-yellow"
               >
-                Download Snip
+                Download Nab
                 <ArrowRight className="h-4 w-4" />
               </a>
             </div>
@@ -109,9 +109,15 @@ export default function Home() {
             <span className="rounded bg-orange px-2 py-0.5 font-semibold text-bg0-hard">
               NORMAL
             </span>
-            <span className="text-fg1">snip 0.1.0</span>
+            <span className="text-fg1">nab 0.1.0</span>
             <span className="text-gray">hosted or self-host</span>
-            <span className="ml-auto text-gray">~/snip</span>
+            <a href="/privacy" className="text-gray transition-colors hover:text-fg0">
+              privacy
+            </a>
+            <a href="/terms" className="text-gray transition-colors hover:text-fg0">
+              terms
+            </a>
+            <span className="ml-auto text-gray">~/nab</span>
           </div>
         </footer>
       </main>

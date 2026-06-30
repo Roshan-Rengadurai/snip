@@ -2,12 +2,16 @@ import AppKit
 import SwiftUI
 import Combine
 import ApplicationServices
-import SnipCore
+import NabCore
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    /// While the onboarding window is up, global gestures are suppressed so the
+    /// interactive "try it" step can practice locally without screencapture /
+    /// Settings stealing focus.
+    private var isOnboarding = false
     let settings = AppSettings()
     let history = UploadHistory()
 
@@ -17,9 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var axPollTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Access stored credentials (nab.credentials) up front on every launch.
+        KeychainStore.shared.prime()
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: "Snip")
+            button.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: "Nab")
             button.image?.isTemplate = true
         }
 
@@ -27,24 +34,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let capture = NSMenuItem(title: "Capture Region", action: #selector(captureRegion), keyEquivalent: "2")
         capture.keyEquivalentModifierMask = [.command, .shift]
         menu.addItem(capture)
-        menu.addItem(NSMenuItem(title: "Share Selected Text", action: #selector(shareText), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Share Selected Text", action: #selector(shareText as () -> Void), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Onboarding…", action: #selector(showOnboardingMenu), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Snip", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Nab", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
 
         // Gestures.
         hotkey.gapProvider = { [weak self] in (self?.settings.doubleCmdGap ?? 300) / 1000 }
-        hotkey.onCommandDouble = { [weak self] in
-            guard self?.settings.shortcutEnabled == true else { return }
-            self?.captureRegion()
+        hotkey.onCommandDouble = { [weak self] shiftHeld in
+            guard let self, !self.isOnboarding, self.settings.shortcutEnabled else { return }
+            self.capture(shift: shiftHeld)
         }
-        hotkey.onControlDouble = { [weak self] in
-            guard self?.settings.textShareEnabled == true else { return }
-            self?.shareText()
+        hotkey.onControlDouble = { [weak self] shiftHeld in
+            guard let self, !self.isOnboarding, self.settings.textShareEnabled else { return }
+            // ⇧ rides along to skip the styled window — when the setting allows it.
+            let raw = shiftHeld && self.settings.shiftRawShare
+            self.shareText(raw: raw)
         }
         Publishers.CombineLatest(settings.$shortcutEnabled, settings.$textShareEnabled)
             .sink { [weak self] _, _ in self?.applyHotkeys() }
@@ -57,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(
-            self, selector: #selector(previewToast), name: .snipPreviewToast, object: nil)
+            self, selector: #selector(previewToast), name: .nabPreviewToast, object: nil)
 
         if settings.hasOnboarded {
             if !settings.isConfigured { openSettings() }
@@ -88,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let host = NSHostingController(
                 rootView: SettingsView().environmentObject(settings).environmentObject(history))
             let window = NSWindow(contentViewController: host)
-            window.title = "Snip Settings"
+            window.title = "Nab Settings"
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 700, height: 620))
@@ -100,19 +109,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showOnboarding() {
+        if let existing = onboardingWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let frame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
         let host = NSHostingController(
             rootView: OnboardingView(onFinish: { [weak self] in
-                self?.onboardingWindow?.close()
-                self?.onboardingWindow = nil
+                self?.dismissOnboarding()
             }).environmentObject(settings))
-        let window = NSWindow(contentViewController: host)
-        window.title = "Welcome to Snip"
-        window.styleMask = [.titled, .closable]
+        host.view.frame = frame
+        host.view.wantsLayer = true
+        host.view.layer?.backgroundColor = .clear // no white flash before SwiftUI paints
+
+        // Borderless full-screen overlay (not the settings GUI). The SwiftUI
+        // content paints its own aurora + frosted card; the window is just a
+        // transparent, key-capable canvas floating above everything — including
+        // the menu bar — so the whole process reads as an overlay, not a window.
+        let window = OverlayWindow(contentRect: frame, styleMask: .borderless,
+                                   backing: .buffered, defer: false)
+        window.contentViewController = host
         window.isReleasedWhenClosed = false
-        window.center()
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false
+        window.level = .screenSaver
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        window.delegate = self
+        window.setFrame(frame, display: true)
         onboardingWindow = window
+        isOnboarding = true
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func dismissOnboarding() {
+        onboardingWindow?.orderOut(nil)
+        onboardingWindow?.close()
+        onboardingWindow = nil
+        isOnboarding = false
+    }
+
+    /// Catches the onboarding window closing by any route (Finish or the
+    /// titlebar close button) so global gestures aren't left suppressed.
+    func windowWillClose(_ notification: Notification) {
+        if (notification.object as? NSWindow) === onboardingWindow {
+            onboardingWindow = nil
+            isOnboarding = false
+        }
     }
 
     @objc private func showOnboardingMenu() { showOnboarding() }
@@ -125,11 +172,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Capture → upload
 
-    @objc private func captureRegion() {
-        guard let provider = settings.makeProvider() else { openSettings(); return }
+    @objc private func captureRegion() { capture(shift: false) }
+
+    /// Capture a region and upload. Holding ⇧ during the gesture copies the raw
+    /// image link (embeds inline in Discord); without ⇧ you get the preview-card
+    /// page link. (Self-host has a single link, so ⇧ is a no-op there.)
+    private func capture(shift: Bool) {
+        // Hosting needs only a license key; self-host needs full provider config.
+        if !settings.useNabHosting, settings.makeProvider() == nil { openSettings(); return }
         let fmt = settings.captureFormat == "jpg" ? "jpg" : "png"
         let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("snip-\(UUID().uuidString).\(fmt)")
+            .appendingPathComponent("nab-\(UUID().uuidString).\(fmt)")
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -140,16 +193,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let data = try? Data(contentsOf: tmp), !data.isEmpty else { return } // cancelled
 
-        upload(data: data, ext: fmt, origin: .capture, kindLabel: "Screenshot") { [weak self] in
+        upload(data: data, ext: fmt, origin: .capture, kindLabel: "Screenshot", rawImage: shift) { [weak self] in
             if self?.settings.autoDeleteAfterUpload == true { try? FileManager.default.removeItem(at: tmp) }
         }
     }
 
     // MARK: - Text highlight share
 
-    @objc private func shareText() {
-        guard let provider = settings.makeProvider() else { openSettings(); return }
-        _ = provider
+    @objc private func shareText() { shareText(raw: false) }
+
+    /// Share the current selection. `raw` skips the styled window image and
+    /// uploads the plain text instead (⇧ + double-⌃).
+    private func shareText(raw: Bool) {
+        if !settings.useNabHosting, settings.makeProvider() == nil { openSettings(); return }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let selected = SelectionReader.currentSelectedText()
             DispatchQueue.main.async {
@@ -159,8 +215,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.showToast(.error, "No text selected")
                     return
                 }
-                // Render the selection as a styled window image (code/terminal vs prose).
-                if let png = SnippetImage.renderPNG(text: text) {
+                // Render the selection as a styled window image (code/terminal vs prose),
+                // unless the user asked for a raw share by holding ⇧.
+                if !raw, let png = SnippetImage.renderPNG(text: text) {
                     self.upload(data: png, ext: "png", origin: .text, kindLabel: "Text")
                 } else {
                     self.upload(data: Data(text.utf8), ext: "txt", origin: .text, kindLabel: "Text")
@@ -172,7 +229,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Shared upload path
 
     private func upload(data: Data, ext: String, origin: UploadOrigin, kindLabel: String,
-                        onSuccess: (() -> Void)? = nil) {
+                        rawImage: Bool = false, onSuccess: (() -> Void)? = nil) {
+        if settings.useNabHosting {
+            uploadHosted(data: data, ext: ext, origin: origin, kindLabel: kindLabel,
+                         rawImage: rawImage, onSuccess: onSuccess)
+            return
+        }
         guard let provider = settings.makeProvider() else { openSettings(); return }
         let pipeline = UploadPipeline(
             provider: provider,
@@ -187,6 +249,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 var rng = SystemRandomNumberGenerator()
                 let outcome = try await pipeline.upload(item, using: &rng)
                 history.add(url: outcome.url.absoluteString, key: outcome.key,
+                            byteSize: data.count, origin: originString(origin))
+                if settings.soundOnSuccess { NSSound(named: "Glass")?.play() }
+                onSuccess?()
+                showToast(.success, "\(kindLabel) link successfully copied to your clipboard")
+            } catch {
+                NSSound.beep()
+                showToast(.error, "Upload failed — \(Self.describe(error))")
+            }
+        }
+    }
+
+    /// Hosted upload path: POST bytes to the Nab web app, copy the returned
+    /// share link. Server assigns the unguessable slug and per-link expiry.
+    private func uploadHosted(data: Data, ext: String, origin: UploadOrigin, kindLabel: String,
+                              rawImage: Bool, onSuccess: (() -> Void)? = nil) {
+        guard !settings.nabLicenseKey.isEmpty, let base = URL(string: settings.nabApiBase) else {
+            openSettings(); return
+        }
+        let uploader = NabHostedUploader(apiBase: base)
+        let contentType = ContentType.mime(forExtension: ext)
+        Task { @MainActor in
+            do {
+                let outcome = try await uploader.upload(
+                    data: data,
+                    contentType: contentType,
+                    ttlSeconds: settings.nabExpirySeconds,
+                    licenseKey: settings.nabLicenseKey
+                )
+                // ⇧ → raw image link (inline); default → preview-card page link.
+                let link = rawImage ? outcome.imageURL : outcome.pageURL
+                ClipboardWriter().writeURL(link)
+                history.add(url: link.absoluteString, key: outcome.slug,
                             byteSize: data.count, origin: originString(origin))
                 if settings.soundOnSuccess { NSSound(named: "Glass")?.play() }
                 onSuccess?()

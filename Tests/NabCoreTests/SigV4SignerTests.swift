@@ -1,5 +1,5 @@
 import XCTest
-@testable import SnipCore
+@testable import NabCore
 
 final class SigV4SignerTests: XCTestCase {
     private func fixedDate(_ amz: String) -> Date {

@@ -64,7 +64,7 @@ struct SettingsView: View {
                     .overlay(Image(systemName: "scissors")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(Gruv.bg0h))
-                Text("Snip").font(.mono(14, weight: .semibold)).foregroundColor(Gruv.fg0)
+                Text("Nab").font(.mono(14, weight: .semibold)).foregroundColor(Gruv.fg0)
                 Spacer()
             }
             .padding(.bottom, 2)
@@ -138,7 +138,7 @@ struct GeneralPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ToggleRow(title: "Launch at login",
-                      subtitle: "Start Snip when you log in",
+                      subtitle: "Start Nab when you log in",
                       isOn: $settings.launchAtLogin)
             ToggleRow(title: "Optimistic clipboard",
                       subtitle: "Copy the link before the upload finishes",
@@ -154,6 +154,9 @@ struct GeneralPane: View {
             ToggleRow(title: "Tap ⌃ twice to share text",
                       subtitle: "Upload the current text selection as a link",
                       isOn: $settings.textShareEnabled)
+            ToggleRow(title: "Hold ⇧ for a raw share",
+                      subtitle: "⇧ + ⌃⌃ skips the styled window and shares plain text",
+                      isOn: $settings.shiftRawShare)
             SliderRow(title: "Max gap between taps", value: $settings.doubleCmdGap,
                       range: 150...600, step: 25, valueLabel: "\(Int(settings.doubleCmdGap)) ms")
         }
@@ -181,7 +184,7 @@ struct NotificationsPane: View {
                       range: 1...4, step: 0.1,
                       valueLabel: String(format: "%.1f s", settings.toastDuration))
             Button {
-                NotificationCenter.default.post(name: .snipPreviewToast, object: nil)
+                NotificationCenter.default.post(name: .nabPreviewToast, object: nil)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "eye.fill").font(.system(size: 11, weight: .semibold))
@@ -206,25 +209,56 @@ struct StoragePane: View {
         CardOption(id: "b2", symbol: "shippingbox.fill", label: "B2"),
         CardOption(id: "minio", symbol: "server.rack", label: "MinIO"),
     ]
+    private let expiries = [
+        CardOption(id: "1h", symbol: "clock", label: "1 hour"),
+        CardOption(id: "1d", symbol: "clock.fill", label: "1 day"),
+        CardOption(id: "7d", symbol: "calendar", label: "7 days"),
+        CardOption(id: "30d", symbol: "calendar.circle", label: "30 days"),
+    ]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GroupLabel(text: "Provider")
-            SegmentedCards(options: kinds, selection: $settings.providerKind)
+            GroupLabel(text: "Hosting")
+            ToggleRow(title: "Use Nab hosting",
+                      subtitle: "Upload to Nab — no bucket setup. Links preview in Discord & Slack.",
+                      isOn: $settings.useNabHosting)
 
-            FieldRow(title: "Endpoint", placeholder: "https://acct.r2.cloudflarestorage.com", text: $settings.endpoint)
-            HStack(spacing: 12) {
-                FieldRow(title: "Bucket", placeholder: "shots", text: $settings.bucket)
-                FieldRow(title: "Region", placeholder: "auto", text: $settings.region)
+            if settings.useNabHosting {
+                FieldRow(title: "License key", placeholder: "NB-XXXX-XXXX-XXXX", text: $settings.nabLicenseKey)
+                GroupLabel(text: "Link expiry")
+                SegmentedCards(options: expiries, selection: $settings.nabExpiry)
+                nabStatusCard
+            } else {
+                GroupLabel(text: "Provider")
+                SegmentedCards(options: kinds, selection: $settings.providerKind)
+
+                FieldRow(title: "Endpoint", placeholder: "https://acct.r2.cloudflarestorage.com", text: $settings.endpoint)
+                HStack(spacing: 12) {
+                    FieldRow(title: "Bucket", placeholder: "shots", text: $settings.bucket)
+                    FieldRow(title: "Region", placeholder: "auto", text: $settings.region)
+                }
+                FieldRow(title: "Access Key ID", placeholder: "AKID…", text: $settings.accessKey)
+                FieldRow(title: "Secret Access Key", placeholder: "••••••", secure: true, text: $settings.secretKey)
+                FieldRow(title: "Public base (optional)", placeholder: "https://cdn.example.com", text: $settings.publicBase)
+                ToggleRow(title: "Path-style addressing",
+                          subtitle: "On for R2 / MinIO / B2, off for AWS S3",
+                          isOn: $settings.pathStyle)
+
+                statusCard
+                devConfigButton
             }
-            FieldRow(title: "Access Key ID", placeholder: "AKID…", text: $settings.accessKey)
-            FieldRow(title: "Secret Access Key", placeholder: "••••••", secure: true, text: $settings.secretKey)
-            FieldRow(title: "Public base (optional)", placeholder: "https://cdn.example.com", text: $settings.publicBase)
-            ToggleRow(title: "Path-style addressing",
-                      subtitle: "On for R2 / MinIO / B2, off for AWS S3",
-                      isOn: $settings.pathStyle)
+        }
+    }
 
-            statusCard
-            devConfigButton
+    private var nabStatusCard: some View {
+        Card {
+            HStack(spacing: 10) {
+                Circle().fill(settings.nabLicenseKey.isEmpty ? Gruv.red : Gruv.green).frame(width: 9, height: 9)
+                Text(settings.nabLicenseKey.isEmpty
+                     ? "Enter your license key to enable hosting"
+                     : "Ready — hosted uploads on")
+                    .font(.system(size: 12)).foregroundColor(settings.nabLicenseKey.isEmpty ? Gruv.fg3 : Gruv.fg1)
+                Spacer()
+            }
         }
     }
 
@@ -302,9 +336,9 @@ struct AboutPane: View {
         VStack(alignment: .leading, spacing: 12) {
             Card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Snip").font(.mono(20, weight: .bold)).foregroundColor(Gruv.fg0)
+                    Text("Nab").font(.mono(20, weight: .bold)).foregroundColor(Gruv.fg0)
                     Text("v0.1.0").font(.mono(12)).foregroundColor(Gruv.orange)
-                    Text("Snip it. It's already on your clipboard. A menubar capture tool — hosted, or self-hosted to your own bucket.")
+                    Text("Nab it. It's already on your clipboard. A menubar capture tool — hosted, or self-hosted to your own bucket.")
                         .font(.system(size: 12)).foregroundColor(Gruv.fg3)
                         .fixedSize(horizontal: false, vertical: true)
                 }

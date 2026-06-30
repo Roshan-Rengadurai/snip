@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // Redirects to the latest macOS build. Wired to GitHub Releases.
-// Set GITHUB_REPO (e.g. "your-org/snip") in Vercel env.
+// Set GITHUB_REPO (e.g. "your-org/nab") in Vercel env.
 // Until a release exists, falls back to the releases page.
 export const dynamic = "force-dynamic";
 

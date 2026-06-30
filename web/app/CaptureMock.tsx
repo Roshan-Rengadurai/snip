@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +26,7 @@ export default function CaptureMock() {
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false); // selection dragged out?
   const [captured, setCaptured] = useState(false); // link on clipboard?
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const reduce = window.matchMedia(
@@ -37,14 +38,18 @@ export default function CaptureMock() {
       return;
     }
 
-    let active = true;
+    let running = false;
+    let idx = 0;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const clear = () => {
+      timers.forEach(clearTimeout);
+      timers.length = 0;
+    };
     const after = (ms: number, fn: () => void) =>
       timers.push(setTimeout(fn, ms));
 
-    let idx = 0;
     const cycle = () => {
-      if (!active) return;
+      if (!running) return;
       setI(idx);
       setCaptured(false);
       setOpen(false); // snap cursor back to origin
@@ -55,11 +60,37 @@ export default function CaptureMock() {
         cycle();
       });
     };
-    cycle();
+
+    // Only animate while on-screen and the tab is visible — no wasted CPU/battery
+    // looping behind a scrolled-past hero or a backgrounded tab.
+    let onScreen = true;
+    const sync = () => {
+      const shouldRun = onScreen && document.visibilityState === "visible";
+      if (shouldRun && !running) {
+        running = true;
+        cycle();
+      } else if (!shouldRun && running) {
+        running = false;
+        clear();
+      }
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        sync();
+      },
+      { threshold: 0.1 },
+    );
+    const el = ref.current;
+    if (el) io.observe(el);
+    document.addEventListener("visibilitychange", sync);
 
     return () => {
-      active = false;
-      timers.forEach(clearTimeout);
+      running = false;
+      clear();
+      io.disconnect();
+      document.removeEventListener("visibilitychange", sync);
     };
   }, []);
 
@@ -70,7 +101,10 @@ export default function CaptureMock() {
   const curY = ORIGIN_Y + h;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-bg2 bg-bg0-hard shadow-2xl shadow-black/40">
+    <div
+      ref={ref}
+      className="overflow-hidden rounded-xl border border-bg2 bg-bg0-hard shadow-2xl shadow-black/40"
+    >
       {/* window chrome */}
       <div className="flex items-center gap-2 border-b border-bg1 bg-bg1/60 px-4 py-2.5">
         <span className="h-3 w-3 rounded-full bg-red" />
@@ -185,11 +219,11 @@ export default function CaptureMock() {
             className="truncate text-fg0 transition-opacity duration-200"
             style={{ opacity: captured ? 1 : 0.35 }}
           >
-            cdn.you.dev/<span className="text-orange">{shot.id}</span>.png
+            nab.sh/<span className="text-orange">{shot.id}</span>.png
           </div>
         </div>
-        <div className="ml-auto hidden shrink-0 items-center gap-1 sm:flex">
-          <Kbd>⌘</Kbd>
+        <div className="ml-auto hidden shrink-0 items-center gap-1.5 sm:flex">
+          <span className="font-mono text-[10px] text-gray">double-tap</span>
           <Kbd>⌘</Kbd>
         </div>
       </div>
